@@ -189,6 +189,7 @@ int main(int argc, char **argv)
     struct temp_status temp;
     int fdebug = 0, fdelta = 0, fhelp = 0, toggle = 0;
     Display *dpy = XOpenDisplay(NULL);
+    int failed = 0;
 
     if (!dpy)
     {
@@ -217,6 +218,7 @@ int main(int argc, char **argv)
                 screen_specified = atoi(argv[i]);
             } else {
                 fprintf(stderr, "ERROR! Required value for screen not specified!\n");
+                failed = 1;
                 fhelp = 1;
             }
         }
@@ -228,6 +230,7 @@ int main(int argc, char **argv)
                 crtc_specified = atoi(argv[i]);
             } else {
                 fprintf(stderr, "ERROR! Required value for crtc not specified!\n");
+                failed = 1;
                 fhelp = 1;
             }
         }
@@ -236,6 +239,7 @@ int main(int argc, char **argv)
         else
         {
             fprintf(stderr, "ERROR! Unknown parameter: %s\n!", argv[i]);
+            failed = 1;
             fhelp = 1;
         }
     }
@@ -247,6 +251,7 @@ int main(int argc, char **argv)
     else if (screen_specified >= screens)
     {
         fprintf(stderr, "ERROR! Invalid screen index: %d!\n", screen_specified);
+        failed = 1;
     }
     else
     {
@@ -307,6 +312,7 @@ int main(int argc, char **argv)
                 if (temp.temp == DELTA_MIN || temp.brightness == DELTA_MIN)
                 {
                     fprintf(stderr, "ERROR! Temperature and brightness delta must both be specified!\n");
+                    failed = 1;
                 }
                 else
                 {
@@ -328,6 +334,6 @@ int main(int argc, char **argv)
 
     XCloseDisplay(dpy);
 
-    return EXIT_SUCCESS;
+    return failed ? EXIT_FAILURE : EXIT_SUCCESS;
 }
 
