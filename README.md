@@ -1,24 +1,13 @@
-![GitHub release (latest by date)](https://img.shields.io/github/v/release/faf0/sct)
-![GitHub Release Date](https://img.shields.io/github/release-date/faf0/sct)
-![GitHub repo size](https://img.shields.io/github/repo-size/faf0/sct)
-![GitHub](https://img.shields.io/github/license/faf0/sct)  
-
 # About
+
+Fork of the original project:
+https://github.com/faf0/sct
 
 Xsct (X11 set color temperature) is a UNIX tool which allows you to set the color
 temperature of your screen. It is simpler than [Redshift](https://github.com/jonls/redshift) and [f.lux](https://justgetflux.com/).
 
 Original code was published by Ted Unangst in the public domain:
 https://www.tedunangst.com/flak/post/sct-set-color-temperature
-
-Minor modifications were made in order to get sct to:
-- compile on Ubuntu 14.04 and later releases
-- iterate over all screens of the default display and change the color
-  temperature
-- free the Display structure
-- fix memleaks
-- clean up code
-- return `EXIT_SUCCESS`
 
 # Installation
 
@@ -87,11 +76,13 @@ The first parameter (`3700` above) represents the color temperature.
 
 The second parameter (`0.9` above) represents the brightness. The values are in the range `[0.0, 1.0]`.
 
-If `xsct` is called with parameter 0, the color temperature is set to `6500`.
+If `xsct` is called with parameter 0, the color temperature is set to `6500` or
+the value of `XSCT_TEMPERATURE_DAY` environment variable (if any).
 
 If `xsct` is called with the color temperature parameter only, the brightness is set to `1.0`.
 
-If `xsct` is called without parameters, the current display temperature and brightness are estimated.
+If `xsct` is called without parameters, the current display temperature and
+brightness are estimated and outputed to `stdout` (usually the terminal).
 
 The following options, which can be specified before the optional temperature parameter, are supported:
 - `-h`, `--help`: display the help page
@@ -100,6 +91,13 @@ The following options, which can be specified before the optional temperature pa
 - `-s <screen>`, `--screen <screen>` `N`: use the screen specified by given zero-based index
 - `-t`, `--toggle`: toggle between night and day temperature
 - `-c <crtc>`, `--crtc <crtc>` `N`: use the CRTC specified by given zero-based index
+
+Additionally you can define two environment variables `XSCT_TEMPERATURE_DAY`
+and `XSCT_TEMPERATURE_NIGHT`. If `XSCT_TEMPERATURE_DAY` is defined as valid
+integer greater than or equal to `700`, it will be used as the default day
+temperature for `-t` and when `xsct` is called with the temperature being `0`.
+Same holds for `XSCT_TEMPERATURE_NIGHT`, except this will be set as the default
+night temperature for `-t`.
 
 Here are a few examples of how to control the brightness and the temperature using `xsct`:
 
@@ -122,14 +120,13 @@ xsct 3700 0.9 && xsct
 
 # Quirks
 
-If the delta mode is used to decrease the brightness to below 0.0 and then increased above 0.0, the temperature will reset to 6500 K, regardless of whatever it was before the brightness reached 0.
-This is because the temperature is reset to 0 K when the brightness is set equal to or below 0.0 (to verify this, you can run `xsct 0 0.0; xsct`).
+If the delta mode is used to decrease the brightness to below 0.0 and then
+increased above 0.0, the temperature will reset to 6500 K, regardless of
+whatever it was before the brightness reached 0.
+This is because the temperature is reset to 0 K when the brightness is set equal
+to or below 0.0 (to verify this, you can run `xsct 0 0.0; xsct`).
 
 # Resources
 
 The following website by Mitchell Charity provides a table for the conversion between black-body temperatures and color pixel values:
 http://www.vendian.org/mncharity/dir3/blackbody/
-
----
-
-https://github.com/faf0/sct/

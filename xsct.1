@@ -1,4 +1,4 @@
-.TH xsct 1 "Jun 2024" "2.3" "User Manual"
+.TH xsct 1 "December 2025" "2.4" "User Manual"
 .SH NAME
 xsct \- X11 set screen color temperature
 .SH SYNOPSIS
@@ -35,11 +35,23 @@ Zero-based index of CRTC to use.
 Black body temperature
 .br
 If the value is 0, xsct sets the color temperature to the default of 6500
+(or the value of the \fBXSCT_TEMPERATURE_DAY\fR).
 .br
 If no arguments are passed, xsct estimates the current display temperature and brightness
 .TP
 .I [brightness]
 Linear brightness between 0.0 (inclusive) and 1.0 (inclusive). The default value is 1.0 if no parameter is passed.
+
+.SH ENVIRONMENT VARIABLES
+The following environment variables affect the execution of \fBxsct\fR.
+.TP
+.B XSCT_TEMPERATURE_DAY
+Changes the default value of the \fIday\fR temperature.
+Additionally when the value of \fI[temperature]\fR is specified as 0,
+it will be set to this value instead.
+.TP
+.B XSCT_TEMPERATURE_NIGHT
+Changes the default value of the \fInight\fR temperature.
 
 .SH EXIT STATUS
 xsct exits with an exit status of 0 on success and a non-zero value 0 on failure.
