@@ -31,6 +31,24 @@ Toggle between night and day temperature.
 .B -c, --crtc N
 Zero-based index of CRTC to use.
 .TP
+.B -e, --noenv
+Ignore environment variables that affect the execution of \fBxsct\fR.
+.TP
+.B -N, --night
+Set the color temperature to the night temperature of 4500
+(unless changed by \fBXSCT_TEMPERATURE_NIGHT\fR).
+The flag acts in place of the [temperature] argument,
+unless it is followed by \fB-t\fR or \fB-d\fR flag,
+in which case it will be ignored.
+.TP
+.B -D, --day
+Set the color temperature to the day temperature of 6500
+(unless changed by \fBXSCT_TEMPERATURE_DAY\fR).
+This is equivalent to "\fBxsct 0\fR".
+The flag acts in place of the [temperature] argument,
+unless it is followed by \fB-t\fR or \fB-d\fR flag,
+in which case it will be ignored.
+.TP
 .I [temperature]
 Black body temperature
 .br

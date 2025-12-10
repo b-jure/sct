@@ -135,9 +135,12 @@ static int collectindex (const char *const *argv, int argc, int i) {
 }
 
 /* bits in 'flags' */
-#define has_h     1 /* -h or --help */
-#define has_d     2 /* -d or --delta */
-#define has_t     4 /* -t or --toggle */
+#define has_h     1   /* -h or --help */
+#define has_d     2   /* -d or --delta */
+#define has_t     4   /* -t or --toggle */
+#define has_e     8   /* -e or --noenv */
+#define has_N     16  /* -N or --night */
+#define has_D     32  /* -D or --day */
 
 /* collect the CLI arguments into 'flags' */
 static unsigned collectargs (int argc, const char *const *argv, tempstate *ts) {
@@ -149,19 +152,39 @@ static unsigned collectargs (int argc, const char *const *argv, tempstate *ts) {
       break; /* done */
     } else if (IS("-v") || IS("--verbose"))
       verbose = 1;
-    else if (IS("-d") || IS("--delta"))
+    else if (IS("-d") || IS("--delta")) {
       flags |= has_d;
-    else if (IS("-t") || IS("--toggle"))
+      /* delta mode turns off -N and -D */
+      flags &= ~has_D;
+      flags &= ~has_N;
+    } else if (IS("-t") || IS("--toggle")) {
       flags |= has_t;
-    else if (IS("-s") || IS("--screen") || IS("-c") || IS("--crtc")) {
+      /* toggle turns off -N and -D */
+      flags &= ~has_D;
+      flags &= ~has_N;
+    } else if (IS("-s") || IS("--screen") || IS("-c") || IS("--crtc")) {
       if (!collectindex(argv, argc, i)) { /* missing index argument? */
         flags |= has_h; /* show usage before exit */
         break; /* done */
       }
       i++; /* skip index argument */
-    } else if (ts->temp == MIN_DELTA) /* have default temperature? */
+    } else if (IS("-e") || IS("--noenv"))
+      flags |= has_e;
+    else if (IS("-N") || IS("--night")) {
+      flags |= has_N;
+      /* -N turns off -D, -d and -t */
+      flags &= ~has_D;
+      flags &= ~has_d;
+      flags &= ~has_t;
+    } else if (IS("-D") || IS("--day")) {
+      flags |= has_D;
+      /* -D turns off -N, -d and -t */
+      flags &= ~has_N;
+      flags &= ~has_d;
+      flags &= ~has_t;
+    } else if (!(flags & (has_N | has_D)) && ts->temp == MIN_DELTA)
       ts->temp = atoi(argv[i]); /* assume argument is temperature */
-    else if (ts->brightness == MIN_DELTA) /* have default brightness? */
+    else if (ts->brightness == MIN_DELTA)
       ts->brightness = atof(argv[i]); /* assume argument is brightness */
     else { /* unknown argument */
       logerror("unrecognized argument '%s'", argv[i]);
@@ -177,7 +200,7 @@ static void usage (void) {
   printf("Xsct (%s)\n"
          "Usage: %s [options] [temperature] [brightness]\n"
          "\tIf the argument is 0, xsct resets the display to the default "
-         "temperature (6500K)\n"
+         "temperature (%ldK)\n"
          "\tIf no arguments are passed, xsct estimates the current display "
          "temperature and brightness\n"
          "Options:\n"
@@ -189,8 +212,13 @@ static void usage (void) {
          "zero-based index\n"
          "\t-t, --toggle \t xsct will toggle between 'day' and 'night' mode\n"
          "\t-c, --crtc N\t xsct will only select CRTC specified by given "
-         "zero-based index\n",
-         XSCT_VERSION, progname);
+         "zero-based index\n"
+         "\t-e, --noenv\t xsct will ignore environment variables\n"
+         "\t-N, --night\t xsct will set the display to the night temperature "
+         "(%ldK)\n"
+         "\t-D, --day\t xsct will set the display to the day temperature "
+         "(%ldK), this is equivalent to 'xsct 0'\n",
+         XSCT_VERSION, progname, temp_day, temp_night, temp_day);
 }
 
 
@@ -457,7 +485,8 @@ int main (int argc, const char *const *argv) {
   Display *dpy = opendisplay();
   int nscreen = XScreenCount(dpy);
   unsigned flags = collectargs(argc, argv, &ts);
-  checkenvironment(); /* (this might change default values) */
+  if (!(flags & has_e)) /* do not ignore environment variables? */
+    checkenvironment(); /* (this might change default values) */
   if (flags & has_h) /* have -h or --help ? */
     usage();
   else if (!fail && screen_arg >= nscreen) /* invalid screen specified? */
@@ -473,6 +502,10 @@ int main (int argc, const char *const *argv) {
       firstscreen = screen_arg;
       lastscreen = screen_arg;
     }
+    if (flags & has_D) /* -D or --day */
+      ts.temp = temp_day;
+    else if (flags & has_N) /* -N or --night */
+      ts.temp = temp_night;
     if ((ts.temp == MIN_DELTA) && !(flags & has_d)) /* no arguments? */
       printestimate(dpy, firstscreen, lastscreen);
     else { /* unspecified temperature or delta mode */
