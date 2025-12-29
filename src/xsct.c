@@ -113,37 +113,40 @@ static void logerror (const char *fmt, ...) {
 ** CLI arguments
 ** ======================================================================= */
 
+/* bits in 'flags' */
+#define has_h     (1<<0) /* -h or --help */
+#define has_d     (1<<1) /* -d or --delta */
+#define has_t     (1<<2) /* -t or --toggle */
+#define has_e     (1<<3) /* -e or --noenv */
+#define has_N     (1<<4) /* -N or --night */
+#define has_D     (1<<5) /* -D or --day */
+#define has_c     (1<<6) /* -c or --crtc */
+#define has_s     (1<<7) /* -s or --screen */
+
+
 /* strcmp for 'argv[i]' */
 #define IS(opt)     (strcmp(argv[i], opt) == 0)
 
 /* get the crtc or screen index argument */
-static int collectindex (const char *const *argv, int argc, int i) {
-  int iscrtc = (IS("-c") || IS("--crtc")) ? 1 : 0;
+static int collectindex (const char *const *argv, int argc, int i, unsigned f) {
   i++; /* check next argument for the index */
   if (i < argc) { /* have next argument? */
-    if (iscrtc) /* crtc index? */
+    if (f & has_c) /* crtc index? */
       crtc_arg = atoi(argv[i]);
     else /* screen index */
       screen_arg = atoi(argv[i]);
     return 1; /* ok */
   } else { /* missing index argument */
     const char *arg = argv[--i];
-    const char *what = iscrtc ? "crtc" : "screen";
+    const char *what = (f & has_c) ? "crtc" : "screen";
     logerror("'%s' is missing %s index argument", arg, what);
     return 0; /* fail */
   }
 }
 
-/* bits in 'flags' */
-#define has_h     1   /* -h or --help */
-#define has_d     2   /* -d or --delta */
-#define has_t     4   /* -t or --toggle */
-#define has_e     8   /* -e or --noenv */
-#define has_N     16  /* -N or --night */
-#define has_D     32  /* -D or --day */
-
 /* collect the CLI arguments into 'flags' */
 static unsigned collectargs (int argc, const char *const *argv, tempstate *ts) {
+  unsigned f = 0; /* for 'collectindex' */
   unsigned flags = 0;
   progname = argv[0];
   for (int i = 1; i < argc; i++) {
@@ -154,16 +157,17 @@ static unsigned collectargs (int argc, const char *const *argv, tempstate *ts) {
       verbose = 1;
     else if (IS("-d") || IS("--delta")) {
       flags |= has_d;
-      /* delta mode turns off -N and -D */
-      flags &= ~has_D;
-      flags &= ~has_N;
+      flags &= ~(has_D | has_N); /* delta mode turns off -N and -D */
     } else if (IS("-t") || IS("--toggle")) {
       flags |= has_t;
-      /* toggle turns off -N and -D */
-      flags &= ~has_D;
-      flags &= ~has_N;
-    } else if (IS("-s") || IS("--screen") || IS("-c") || IS("--crtc")) {
-      if (!collectindex(argv, argc, i)) { /* missing index argument? */
+      flags &= ~(has_D | has_N); /* toggle turns off -N and -D */
+    } else if (IS("-s") || IS("--screen")) {
+      flags |= (f = has_s);
+      goto l_cindex;
+    } else if (IS("-c") || IS("--crtc")) {
+      flags |= (f = has_c);
+    l_cindex:
+      if (!collectindex(argv, argc, i, f)) { /* missing index argument? */
         flags |= has_h; /* show usage before exit */
         break; /* done */
       }
@@ -172,16 +176,10 @@ static unsigned collectargs (int argc, const char *const *argv, tempstate *ts) {
       flags |= has_e;
     else if (IS("-N") || IS("--night")) {
       flags |= has_N;
-      /* -N turns off -D, -d and -t */
-      flags &= ~has_D;
-      flags &= ~has_d;
-      flags &= ~has_t;
+      flags &= ~(has_D | has_d | has_t); /* -N turns off -D, -d and -t */
     } else if (IS("-D") || IS("--day")) {
       flags |= has_D;
-      /* -D turns off -N, -d and -t */
-      flags &= ~has_N;
-      flags &= ~has_d;
-      flags &= ~has_t;
+      flags &= ~(has_N | has_d | has_t); /* -D turns off -N, -d and -t */
     } else if (!(flags & (has_N | has_D)) && ts->temp == MIN_DELTA)
       ts->temp = atoi(argv[i]); /* assume argument is temperature */
     else if (ts->brightness == MIN_DELTA)
@@ -394,9 +392,9 @@ static Display *opendisplay (void) {
 
 static void errorargscreen (int nscreen) {
   if (nscreen > 1) /* multiple screens? */
-    logerror("invalid screen index '%d', expected 0..%d", screen_arg, nscreen);
+    logerror("invalid screen index '%d' (expected 0..%d)", screen_arg, nscreen);
   else /* only one screen */
-    logerror("invalid screen index '%d', expected 0");
+    logerror("invalid screen index '%d' (expected 0)", screen_arg);
 }
 
 
@@ -406,22 +404,30 @@ static long envtotemp (const char *p, long dfl, const char *envn) {
   if (endptr == p) { /* nothing was converted? */
     logwarn("invalid value for %s environment variable (expect integer)", envn);
     x = dfl; /* set default value */
-  } /* else something was converted */
+  } /* else part of or the entire numeral was converted */
   return boundtemp(x, dfl, envn);
 }
 
+
+/* logging for 'checkenv' */
+#define logenv(n, dfl) \
+  loginfo("unspecified %s environment variable (using default %ldK)", n, dfl);
 
 /*
 ** Check the environment for the variables XSCT_TEMPERATURE_DAY and
 ** XSCT_TEMPERATURE_NIGHT and use them as defaults (if any).
 ** This also corrects then if they are out of some hard bounds.
 */
-static void checkenvironment (void) {
+static void checkenv (void) {
   char *p;
   if ((p = getenv(XSCT_TEMPERATURE_DAY)))
     temp_day = envtotemp(p, temp_day, XSCT_TEMPERATURE_DAY);
+  else if (verbose)
+    logenv(XSCT_TEMPERATURE_DAY, temp_day);
   if ((p = getenv(XSCT_TEMPERATURE_NIGHT)))
     temp_night = envtotemp(p, temp_night, XSCT_TEMPERATURE_NIGHT);
+  else if (verbose)
+    logenv(XSCT_TEMPERATURE_NIGHT, temp_night);
 }
 
 
@@ -446,11 +452,11 @@ static void toggledaynight (Display *dpy, int nscreen) {
 }
 
 
-static void printestimate (Display *dpy, int first, int last) {
-  while (first <= last) {
-    tempstate ts = getst(dpy, first, crtc_arg);
-    printf("Screen[%d]: temperature ~ %ld %g\n", first, ts.temp, ts.brightness);
-    first++;
+static void printestimate (Display *dpy, int firstscreen, int lastscreen) {
+  while (firstscreen <= lastscreen) {
+    tempstate ts = getst(dpy, firstscreen, crtc_arg);
+    printf("Screen[%d]: temp ~ %ld %g\n", firstscreen, ts.temp, ts.brightness);
+    firstscreen++;
   }
 }
 
@@ -480,41 +486,46 @@ static void deltasct (Display *dpy, tempstate ts, int first, int last) {
 }
 
 
+static void processargs (Display *dpy, unsigned flags, int firstscreen,
+                         int lastscreen, tempstate ts) {
+  if (!(flags & has_e)) /* check environment variables? */
+    checkenv(); /* (this might change default values) */
+  if (flags & has_t) /* -t or --toggle? */
+    toggledaynight(dpy, lastscreen + 1);
+  if ((ts.brightness == MIN_DELTA) && !(flags & has_d))
+    ts.brightness = 1.0; /* set default brightness */
+  if (flags & has_D) /* -D or --day */
+    ts.temp = temp_day;
+  else if (flags & has_N) /* -N or --night */
+    ts.temp = temp_night;
+  if (flags & has_d) /* delta mode? */
+    deltasct(dpy, ts, firstscreen, lastscreen);
+  else if (ts.temp != MIN_DELTA) /* user provided temperature? */
+    regularsct(dpy, ts, firstscreen, lastscreen);
+}
+
+
 int main (int argc, const char *const *argv) {
   tempstate ts = { .temp = MIN_DELTA, .brightness = MIN_DELTA };
-  Display *dpy = opendisplay();
-  int nscreen = XScreenCount(dpy);
   unsigned flags = collectargs(argc, argv, &ts);
-  if (!(flags & has_e)) /* do not ignore environment variables? */
-    checkenvironment(); /* (this might change default values) */
   if (flags & has_h) /* have -h or --help ? */
-    usage();
-  else if (!fail && screen_arg >= nscreen) /* invalid screen specified? */
-    errorargscreen(nscreen);
-  else {
+    usage(); /* print usage and done */
+  else if (!fail) { /* no errors while collecting arguments? */
+    Display *dpy = opendisplay();
+    int nscreen = XScreenCount(dpy);
     int firstscreen = 0;
     int lastscreen = nscreen - 1;
-    if (flags & has_t) /* -t or --toggle? */
-      toggledaynight(dpy, nscreen);
-    if ((ts.brightness == MIN_DELTA) && !(flags & has_d))
-      ts.brightness = 1.0; /* set default brightness */
-    if (screen_arg >= 0) { /* screen index was specified? */
+    if (screen_arg > lastscreen) /* invalid screen specified? */
+      errorargscreen(nscreen);
+    else if (screen_arg >= 0) { /* screen index was specified? */
       firstscreen = screen_arg;
       lastscreen = screen_arg;
     }
-    if (flags & has_D) /* -D or --day */
-      ts.temp = temp_day;
-    else if (flags & has_N) /* -N or --night */
-      ts.temp = temp_night;
-    if ((ts.temp == MIN_DELTA) && !(flags & has_d)) /* no arguments? */
+    if (!flags) /* no arguments? */
       printestimate(dpy, firstscreen, lastscreen);
-    else { /* unspecified temperature or delta mode */
-      if (!(flags & has_d)) /* absolute mode? */
-        regularsct(dpy, ts, firstscreen, lastscreen);
-      else /* otherwise delta mode */
-        deltasct(dpy, ts, firstscreen, lastscreen);
-    }
+    else
+      processargs(dpy, flags, firstscreen, lastscreen, ts);
+    XCloseDisplay(dpy);
   }
-  XCloseDisplay(dpy);
   return (fail) ? EXIT_FAILURE : EXIT_SUCCESS;
 }
